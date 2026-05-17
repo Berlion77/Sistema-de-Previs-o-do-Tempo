@@ -9,8 +9,16 @@ require_once __DIR__ . '/controllers/WeatherController.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
 $uri    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
-// Remove o prefixo do caminho da pasta backend (ajuste conforme o servidor)
+$script = $_SERVER['SCRIPT_NAME'];
+
+// Ajusta rotas para chamadas via index.php/path em subpastas
+if (str_starts_with($uri, $script)) {
+    $uri = substr($uri, strlen($script));
+} elseif (str_starts_with($uri, dirname($script))) {
+    $uri = substr($uri, strlen(dirname($script)));
+}
 $uri = preg_replace('#^/backend#', '', $uri);
+$uri = $uri ?: '/';
 
 // ============================================================
 // Rotas de Autenticação
