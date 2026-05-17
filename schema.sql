@@ -1,6 +1,5 @@
 -- ============================================================
 -- A Juba que Prevê — Database Schema
--- Sistema de Previsão do Tempo — ISPTEC 2025/2026
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS ajuba_previsao
@@ -9,9 +8,6 @@ CREATE DATABASE IF NOT EXISTS ajuba_previsao
 
 USE ajuba_previsao;
 
--- ------------------------------------------------------------
--- Tabela 1: Utilizadores
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
   id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name            VARCHAR(120)  NOT NULL,
@@ -26,9 +22,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Tabela 2: Cidades Favoritas
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS favorite_cities (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id     INT UNSIGNED NOT NULL,
@@ -41,9 +34,6 @@ CREATE TABLE IF NOT EXISTS favorite_cities (
   UNIQUE KEY uq_user_city (user_id, city_name, country)
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Tabela 3: Histórico de Pesquisas
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS search_history (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id     INT UNSIGNED NOT NULL,
@@ -53,9 +43,6 @@ CREATE TABLE IF NOT EXISTS search_history (
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Tabela 4: Cache de Clima (reduz chamadas à API)
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS weather_cache (
   id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   city_key     VARCHAR(200) NOT NULL UNIQUE,
@@ -64,30 +51,18 @@ CREATE TABLE IF NOT EXISTS weather_cache (
   expires_at   DATETIME NOT NULL
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Tabela 5: Alertas de Clima
--- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS weather_alerts (
   id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   user_id          INT UNSIGNED NOT NULL,
   city_name        VARCHAR(120) NOT NULL,
   country          VARCHAR(10)  NOT NULL,
-  alert_condition  VARCHAR(50)  NOT NULL COMMENT 'rain,snow,storm,temp_above,temp_below',
+  alert_condition  VARCHAR(50)  NOT NULL,
   threshold        DECIMAL(6,2) NULL,
   active           TINYINT(1)   NOT NULL DEFAULT 1,
   created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
--- ------------------------------------------------------------
--- Seed: Admin padrão (senha: admin123)
--- ------------------------------------------------------------
 INSERT INTO users (name, email, password_hash, role, language, theme)
-VALUES (
-  'Administrador',
-  'admin@ajuba.ao',
-  '$2y$12$Q3K5vJb2OdYUMzSmXjYuCeHE0CfKD5TJmZpU3TfH1lLkC4fBsAW7a',
-  'admin',
-  'pt',
-  'dark'
-);
+SELECT * FROM (SELECT 'Administrador', 'admin@ajuba.ao', '$2y$12$Q3K5vJb2OdYUMzSmXjYuCeHE0CfKD5TJmZpU3TfH1lLkC4fBsAW7a', 'admin', 'pt', 'dark') AS tmp
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@ajuba.ao') LIMIT 1;

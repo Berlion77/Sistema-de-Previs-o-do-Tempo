@@ -64,14 +64,14 @@ class WeatherModel {
     // ---- Alerts ----
     public static function addAlert(int $userId, string $city, string $country, string $condition, ?float $threshold): int {
         $db = getDB();
-        $st = $db->prepare('INSERT INTO weather_alerts (user_id, city_name, country, `condition`, threshold) VALUES (?,?,?,?,?)');
+        $st = $db->prepare('INSERT INTO weather_alerts (user_id, city_name, country, alert_condition, threshold) VALUES (?,?,?,?,?)');
         $st->execute([$userId, $city, $country, $condition, $threshold]);
         return (int) $db->lastInsertId();
     }
 
     public static function getAlerts(int $userId): array {
         $db = getDB();
-        $st = $db->prepare('SELECT * FROM weather_alerts WHERE user_id=? ORDER BY created_at DESC');
+        $st = $db->prepare('SELECT id, city_name, country, alert_condition AS condition, threshold, active, created_at FROM weather_alerts WHERE user_id=? ORDER BY created_at DESC');
         $st->execute([$userId]);
         return $st->fetchAll();
     }

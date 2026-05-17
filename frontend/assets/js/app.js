@@ -1,21 +1,27 @@
 // assets/js/app.js — Controlador Principal da Aplicação
 const App = (() => {
 
-  let _t          = window.LANG_PT;
-  let _lang       = 'pt';
-  let _theme      = 'dark';
+  let _t = window.LANG_PT;
+  let _lang = 'pt';
+  let _theme = 'dark';
   let _currentWeather = null;
-  let _favorites  = [];
+  let _favorites = [];
 
   // ================================================================
   // Boot
   // ================================================================
   async function init() {
     // Carregar preferências guardadas
-    _lang  = localStorage.getItem('ajuba_lang')  || 'pt';
+    _lang = localStorage.getItem('ajuba_lang') || 'pt';
     _theme = localStorage.getItem('ajuba_theme') || 'dark';
     applyLang(_lang);
     applyTheme(_theme);
+
+    // Configurar scroll to top button
+    setupScrollTop();
+    
+    // Configurar menu mobile
+    setupMobileMenu();
 
     if (!Auth.isLoggedIn()) {
       showAuthPage();
@@ -31,15 +37,82 @@ const App = (() => {
   }
 
   // ================================================================
+  // UI Helpers
+  // ================================================================
+  function setupScrollTop() {
+    // Criar botão de scroll to top se não existir
+    if (!document.querySelector('.scroll-top')) {
+      const btn = document.createElement('button');
+      btn.className = 'scroll-top';
+      btn.innerHTML = '↑';
+      btn.setAttribute('aria-label', 'Voltar ao topo');
+      btn.onclick = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+      document.body.appendChild(btn);
+      
+      window.addEventListener('scroll', () => {
+        if (window.scrollY > 300) {
+          btn.classList.add('visible');
+        } else {
+          btn.classList.remove('visible');
+        }
+      });
+    }
+  }
+
+  function setupMobileMenu() {
+    if (window.innerWidth <= 768) {
+      // Verificar se o botão já existe
+      if (!document.querySelector('.menu-toggle')) {
+        const menuBtn = document.createElement('button');
+        menuBtn.className = 'menu-toggle';
+        menuBtn.innerHTML = '☰';
+        menuBtn.setAttribute('aria-label', 'Menu');
+        menuBtn.onclick = () => {
+          const sidebar = document.querySelector('.sidebar');
+          const overlay = document.querySelector('.sidebar-overlay');
+          if (sidebar) {
+            sidebar.classList.toggle('open');
+            if (overlay) overlay.classList.toggle('open');
+            document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
+          }
+        };
+        document.body.appendChild(menuBtn);
+      }
+      
+      // Criar overlay se não existir
+      if (!document.querySelector('.sidebar-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'sidebar-overlay';
+        overlay.onclick = () => {
+          const sidebar = document.querySelector('.sidebar');
+          if (sidebar) {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('open');
+            document.body.style.overflow = '';
+          }
+        };
+        document.body.appendChild(overlay);
+      }
+    }
+  }
+
+  // ================================================================
   // i18n
   // ================================================================
   function applyLang(lang) {
     _lang = lang;
-    _t    = lang === 'en' ? window.LANG_EN : window.LANG_PT;
+    _t = lang === 'en' ? window.LANG_EN : window.LANG_PT;
     localStorage.setItem('ajuba_lang', lang);
+    
+    // Atualizar atributo lang do HTML
+    document.documentElement.lang = lang === 'pt' ? 'pt-PT' : 'en-US';
   }
 
-  function t(key) { return _t[key] || key; }
+  function t(key) {
+    return _t[key] || key;
+  }
 
   // ================================================================
   // Tema
@@ -48,17 +121,59 @@ const App = (() => {
     _theme = theme;
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('ajuba_theme', theme);
+    
+    // Atualizar meta theme-color
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      const color = theme === 'dark' ? '#0a0a12' : '#f0f4ff';
+      metaThemeColor.setAttribute('content', color);
+    }
+    
+    // Disparar evento para outros componentes
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme } }));
   }
 
   function toggleTheme() {
     applyTheme(_theme === 'dark' ? 'light' : 'dark');
+    renderApp();
+    loadFavorites();
+    if (document.querySelector('.settings-card')) {
+      navigate('settings');
+    }
+  }
+
+  function setTheme(theme) {
+    applyTheme(theme);
+    if (Auth.isLoggedIn()) {
+      Api.savePrefs(_lang, theme).catch(() => {});
+    }
+    renderApp();
+    loadFavorites();
+    navigate('settings');
+  }
+
+  async function setLang(lang) {
+    applyLang(lang);
+    if (Auth.isLoggedIn()) {
+      try {
+        await Api.savePrefs(lang, _theme);
+      } catch (e) {}
+    }
+    renderApp();
+    await loadFavorites();
+    navigate('settings');
+  }
+
+  function toggleLang() {
+    setLang(_lang === 'pt' ? 'en' : 'pt');
   }
 
   // ================================================================
   // Auth Page
   // ================================================================
   function showAuthPage() {
-    document.getElementById('app').innerHTML = renderAuthPage();
+    const app = document.getElementById('app');
+    if (app) app.innerHTML = renderAuthPage();
     bindAuthEvents();
   }
 
@@ -84,11 +199,11 @@ const App = (() => {
     return `
       <div class="form-group">
         <label class="form-label">${t('email')}</label>
-        <input class="form-input" type="email" id="login-email" placeholder="email@exemplo.com">
+        <input class="form-input" type="email" id="login-email" placeholder="email@exemplo.com" autocomplete="email">
       </div>
       <div class="form-group">
         <label class="form-label">${t('password')}</label>
-        <input class="form-input" type="password" id="login-pass" placeholder="••••••">
+        <input class="form-input" type="password" id="login-pass" placeholder="••••••" autocomplete="current-password">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.5rem" onclick="App.doLogin()">${t('login')}</button>
       <p style="text-align:center;margin-top:1rem;font-size:.85rem">
@@ -100,46 +215,52 @@ const App = (() => {
     return `
       <div class="form-group">
         <label class="form-label">${t('name')}</label>
-        <input class="form-input" type="text" id="reg-name" placeholder="João Silva">
+        <input class="form-input" type="text" id="reg-name" placeholder="João Silva" autocomplete="name">
       </div>
       <div class="form-group">
         <label class="form-label">${t('email')}</label>
-        <input class="form-input" type="email" id="reg-email" placeholder="email@exemplo.com">
+        <input class="form-input" type="email" id="reg-email" placeholder="email@exemplo.com" autocomplete="email">
       </div>
       <div class="form-group">
         <label class="form-label">${t('password')}</label>
-        <input class="form-input" type="password" id="reg-pass" placeholder="Mín. 6 caracteres">
+        <input class="form-input" type="password" id="reg-pass" placeholder="Mín. 6 caracteres" autocomplete="new-password">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:.5rem" onclick="App.doRegister()">${t('register')}</button>`;
   }
 
   function switchAuthTab(tab) {
-    document.querySelectorAll('.auth-tab').forEach((b, i) => b.classList.toggle('active', (tab === 'login') === (i === 0)));
-    document.getElementById('auth-form-container').innerHTML =
-      tab === 'login' ? renderLoginForm() : renderRegisterForm();
+    const tabs = document.querySelectorAll('.auth-tab');
+    if (tabs.length) {
+      tabs.forEach((b, i) => b.classList.toggle('active', (tab === 'login') === (i === 0)));
+    }
+    const container = document.getElementById('auth-form-container');
+    if (container) {
+      container.innerHTML = tab === 'login' ? renderLoginForm() : renderRegisterForm();
+    }
   }
 
   function showForgot(e) {
-    e?.preventDefault();
-    document.getElementById('auth-form-container').innerHTML = `
-      <p style="color:var(--text2);font-size:.88rem;margin-bottom:1rem">${t('forgotPassword')}</p>
-      <div class="form-group">
-        <label class="form-label">${t('email')}</label>
-        <input class="form-input" type="email" id="forgot-email" placeholder="email@exemplo.com">
-      </div>
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="App.doForgot()">${t('sendReset')}</button>
-      <p style="text-align:center;margin-top:1rem"><a href="#" onclick="App.switchAuthTab('login');return false" style="color:var(--text2);font-size:.85rem">${t('back')}</a></p>`;
+    if (e) e.preventDefault();
+    const container = document.getElementById('auth-form-container');
+    if (container) {
+      container.innerHTML = `
+        <p style="color:var(--text2);font-size:.88rem;margin-bottom:1rem">${t('forgotPassword')}</p>
+        <div class="form-group">
+          <label class="form-label">${t('email')}</label>
+          <input class="form-input" type="email" id="forgot-email" placeholder="email@exemplo.com" autocomplete="email">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="App.doForgot()">${t('sendReset')}</button>
+        <p style="text-align:center;margin-top:1rem"><a href="#" onclick="App.switchAuthTab('login');return false" style="color:var(--text2);font-size:.85rem">${t('back')}</a></p>`;
+    }
   }
 
   function bindAuthEvents() {
-    document.addEventListener('keydown', e => {
+    document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        const login = document.getElementById('login-pass') || document.getElementById('reg-pass');
-        if (login) {
-          const tab = document.querySelector('.auth-tab.active')?.textContent;
-          if (tab === t('login')) doLogin();
-          else doRegister();
-        }
+        const login = document.getElementById('login-pass');
+        const reg = document.getElementById('reg-pass');
+        if (login) App.doLogin();
+        else if (reg) App.doRegister();
       }
     });
   }
@@ -149,8 +270,11 @@ const App = (() => {
   // ================================================================
   async function doLogin() {
     const email = document.getElementById('login-email')?.value.trim();
-    const pass  = document.getElementById('login-pass')?.value;
-    if (!email || !pass) return Modal.toast(t('error'), 'error');
+    const pass = document.getElementById('login-pass')?.value;
+    if (!email || !pass) {
+      Modal.toast(t('error'), 'error');
+      return;
+    }
     try {
       const res = await Api.login(email, pass);
       Auth.setSession(res.token, res.user);
@@ -158,37 +282,58 @@ const App = (() => {
       applyTheme(res.user.theme || 'dark');
       Modal.toast(t('loginSuccess'), 'success');
       await loadApp();
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   async function doRegister() {
-    const name  = document.getElementById('reg-name')?.value.trim();
+    const name = document.getElementById('reg-name')?.value.trim();
     const email = document.getElementById('reg-email')?.value.trim();
-    const pass  = document.getElementById('reg-pass')?.value;
-    if (!name || !email || !pass) return Modal.toast(t('error'), 'error');
+    const pass = document.getElementById('reg-pass')?.value;
+    if (!name || !email || !pass) {
+      Modal.toast(t('error'), 'error');
+      return;
+    }
+    if (pass.length < 6) {
+      Modal.toast('A senha deve ter pelo menos 6 caracteres', 'error');
+      return;
+    }
     try {
       const res = await Api.register(name, email, pass);
       Auth.setSession(res.token, res.user);
       Modal.toast(t('registerSuccess'), 'success');
       await loadApp();
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   async function doForgot() {
     const email = document.getElementById('forgot-email')?.value.trim();
-    if (!email) return Modal.toast(t('error'), 'error');
+    if (!email) {
+      Modal.toast(t('error'), 'error');
+      return;
+    }
     try {
       const res = await Api.forgot(email);
       Modal.toast(res.message, 'info');
       if (res.reset_token) {
         console.info('[Demo] Reset token:', res.reset_token);
-        Modal.toast(`Token (demo): ${res.reset_token.slice(0,12)}...`, 'info', 7000);
       }
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   function doLogout() {
     Auth.clearSession();
+    // Fechar menu mobile se estiver aberto
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+    document.body.style.overflow = '';
     showAuthPage();
   }
 
@@ -196,71 +341,172 @@ const App = (() => {
   // App Shell
   // ================================================================
   function renderApp() {
-    const user    = Auth.getUser();
+    const user = Auth.getUser();
     const initial = user?.name?.[0]?.toUpperCase() || 'U';
     const isAdmin = Auth.isAdmin();
 
-    document.getElementById('app').innerHTML = `
-      <div class="bg-gradient"></div>
-      <nav class="navbar">
-        <a class="navbar-brand" href="#" onclick="App.navigate('home');return false">
-          <div class="brand-logo">🦁</div>
-          <div>
-            <div class="brand-name">${t('appName')}</div>
-            <div class="brand-tagline">${t('tagline')}</div>
+    const app = document.getElementById('app');
+    if (app) {
+      app.innerHTML = `
+        <div class="bg-gradient"></div>
+        <nav class="navbar">
+          <a class="navbar-brand" href="#" onclick="App.navigate('home');return false">
+            <div class="brand-logo">🦁</div>
+            <div>
+              <div class="brand-name">${t('appName')}</div>
+              <div class="brand-tagline">${t('tagline')}</div>
+            </div>
+          </a>
+          <div class="navbar-actions">
+            <button class="nav-icon-btn" onclick="App.toggleTheme()" title="${t('theme')}" data-tooltip="${t('theme')}">
+              ${_theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+            <button class="nav-icon-btn" onclick="App.toggleLang()" title="${t('language')}" data-tooltip="${t('language')}">
+              ${_lang === 'pt' ? '🇵🇹' : '🇬🇧'}
+            </button>
+            <div class="nav-user">
+              <div class="nav-avatar" title="${user?.name || ''}">${initial}</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="App.navigate('settings')">⚙️</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.doLogout()">← ${t('logout')}</button>
           </div>
-        </a>
-        <div class="navbar-actions">
-          <button class="nav-icon-btn" onclick="App.toggleTheme()" title="${t('theme')}">
-            ${_theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-          <button class="nav-icon-btn" onclick="App.toggleLang()" title="${t('language')}">
-            ${_lang === 'pt' ? '🇵🇹' : '🇬🇧'}
-          </button>
-          <div class="nav-user">
-            <div class="nav-avatar" title="${user?.name || ''}">${initial}</div>
-            <span class="hidden" style="display:none" id="nav-username">${user?.name || ''}</span>
-          </div>
-          <button class="btn btn-ghost btn-sm" onclick="App.navigate('settings')">⚙️</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.doLogout()">← ${t('logout')}</button>
+        </nav>
+
+        <div class="main-layout">
+          <aside class="sidebar">
+            <div class="sidebar-section">
+              <h4>Menu</h4>
+              <div class="sidebar-item" id="nav-home" onclick="App.navigate('home')">
+                <span class="icon">🏠</span> Home
+              </div>
+              <div class="sidebar-item" id="nav-favorites" onclick="App.navigate('favorites')">
+                <span class="icon">♥</span> ${t('favorites')}
+              </div>
+              <div class="sidebar-item" id="nav-history" onclick="App.navigate('history')">
+                <span class="icon">🕒</span> ${t('history')}
+              </div>
+              <div class="sidebar-item" id="nav-alerts" onclick="App.navigate('alerts')">
+                <span class="icon">🔔</span> ${t('alerts')}
+              </div>
+              <div class="sidebar-item" id="nav-settings" onclick="App.navigate('settings')">
+                <span class="icon">⚙️</span> ${t('settings')}
+              </div>
+              ${isAdmin ? `<div class="sidebar-item" id="nav-admin" onclick="App.navigate('admin')">
+                <span class="icon">👑</span> ${t('admin')}
+              </div>` : ''}
+            </div>
+            <div class="sidebar-section" id="sidebar-favs">
+              <h4>${t('favorites')}</h4>
+              <div id="sidebar-fav-list"><p style="color:var(--text2);font-size:.8rem;padding:0 .5rem">${t('noFavorites')}</p></div>
+            </div>
+          </aside>
+
+          <main class="content-area" id="content-area"></main>
         </div>
-      </nav>
 
-      <div class="main-layout">
-        <!-- Sidebar -->
-        <aside class="sidebar">
-          <div class="sidebar-section">
-            <h4>Menu</h4>
-            <div class="sidebar-item active" id="nav-home" onclick="App.navigate('home')">
-              <span class="icon">🏠</span> Home
-            </div>
-            <div class="sidebar-item" id="nav-favorites" onclick="App.navigate('favorites')">
-              <span class="icon">♥</span> ${t('favorites')}
-            </div>
-            <div class="sidebar-item" id="nav-history" onclick="App.navigate('history')">
-              <span class="icon">🕒</span> ${t('history')}
-            </div>
-            <div class="sidebar-item" id="nav-alerts" onclick="App.navigate('alerts')">
-              <span class="icon">🔔</span> ${t('alerts')}
-            </div>
-            <div class="sidebar-item" id="nav-settings" onclick="App.navigate('settings')">
-              <span class="icon">⚙️</span> ${t('settings')}
-            </div>
-            ${isAdmin ? `<div class="sidebar-item" id="nav-admin" onclick="App.navigate('admin')">
-              <span class="icon">👑</span> ${t('admin')}
-            </div>` : ''}
-          </div>
-          <div class="sidebar-section" id="sidebar-favs">
-            <h4>${t('favorites')}</h4>
-            <div id="sidebar-fav-list"><p style="color:var(--text2);font-size:.8rem;padding:0 .5rem">${t('noFavorites')}</p></div>
-          </div>
-        </aside>
+        <div id="toast-container"></div>`;
+    }
 
-        <!-- Content -->
-        <main class="content-area" id="content-area"></main>
-      </div>
-
-      <div id="toast-container"></div>`;
+    // Adicionar estilos dinâmicos se não existirem
+    if (!document.querySelector('#dynamic-styles')) {
+      const style = document.createElement('style');
+      style.id = 'dynamic-styles';
+      style.textContent = `
+        .bg-gradient {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: radial-gradient(circle at 20% 50%, rgba(247, 165, 42, 0.05) 0%, transparent 50%);
+          pointer-events: none;
+          z-index: 0;
+        }
+        
+        .scroll-top {
+          position: fixed;
+          bottom: 20px;
+          right: 20px;
+          width: 44px;
+          height: 44px;
+          border-radius: 50%;
+          background: var(--accent);
+          color: #000;
+          border: none;
+          cursor: pointer;
+          display: none;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.3rem;
+          transition: all 0.3s ease;
+          z-index: 100;
+          box-shadow: var(--shadow);
+        }
+        
+        .scroll-top.visible {
+          display: flex;
+          animation: fadeInUp 0.3s ease;
+        }
+        
+        .scroll-top:hover {
+          transform: scale(1.1);
+          background: var(--accent2);
+        }
+        
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .menu-toggle {
+            display: block;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 160;
+            background: var(--accent);
+            border: none;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            color: #000;
+          }
+          
+          .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            z-index: 149;
+            display: none;
+          }
+          
+          .sidebar-overlay.open {
+            display: block;
+          }
+        }
+        
+        @media (min-width: 769px) {
+          .menu-toggle, .sidebar-overlay {
+            display: none !important;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Recriar elementos mobile
+    setupMobileMenu();
   }
 
   // ================================================================
@@ -269,23 +515,34 @@ const App = (() => {
   function navigate(page) {
     // Update active nav
     document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
-    document.getElementById(`nav-${page}`)?.classList.add('active');
+    const navItem = document.getElementById(`nav-${page}`);
+    if (navItem) navItem.classList.add('active');
 
     const content = document.getElementById('content-area');
     if (!content) return;
 
+    // Fechar menu mobile após navegação
+    if (window.innerWidth <= 768) {
+      const sidebar = document.querySelector('.sidebar');
+      const overlay = document.querySelector('.sidebar-overlay');
+      if (sidebar) sidebar.classList.remove('open');
+      if (overlay) overlay.classList.remove('open');
+      document.body.style.overflow = '';
+    }
+
     switch (page) {
-      case 'home':      renderHome(content);     break;
+      case 'home': renderHome(content); break;
       case 'favorites': renderFavorites(content); break;
-      case 'history':   renderHistory(content);   break;
-      case 'alerts':    renderAlerts(content);     break;
-      case 'settings':  renderSettings(content);   break;
-      case 'admin':     renderAdmin(content);       break;
+      case 'history': renderHistory(content); break;
+      case 'alerts': renderAlerts(content); break;
+      case 'settings': renderSettings(content); break;
+      case 'admin': renderAdmin(content); break;
+      default: renderHome(content);
     }
   }
 
   // ================================================================
-  // Home Page — Pesquisa
+  // Home Page
   // ================================================================
   function renderHome(container) {
     container.innerHTML = `
@@ -305,7 +562,8 @@ const App = (() => {
     if (_currentWeather) {
       displayWeather(_currentWeather.current, _currentWeather.forecast);
     }
-    document.getElementById('search-input')?.focus();
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.focus();
   }
 
   function handleSearchKey(e) {
@@ -314,11 +572,13 @@ const App = (() => {
 
   async function doSearch() {
     const input = document.getElementById('search-input');
-    const city  = input?.value.trim();
+    const city = input?.value.trim();
     if (!city) return;
 
     const result = document.getElementById('weather-result');
-    result.innerHTML = `<div class="loading-center"><div class="spinner"></div><span>${t('loading')}</span></div>`;
+    if (result) {
+      result.innerHTML = `<div class="loading-center"><div class="spinner"></div><span>${t('loading')}</span></div>`;
+    }
 
     try {
       const [cur, fct] = await Promise.all([
@@ -328,23 +588,29 @@ const App = (() => {
       _currentWeather = { current: cur.data, forecast: fct.data };
       displayWeather(cur.data, fct.data);
     } catch (err) {
-      result.innerHTML = `<div class="empty-state"><div class="empty-icon">🌧️</div><p>${err.message}</p></div>`;
+      if (result) {
+        result.innerHTML = `<div class="empty-state"><div class="empty-icon">🌧️</div><p>${err.message}</p></div>`;
+      }
     }
   }
 
   async function useGeo() {
-    if (!navigator.geolocation) return Modal.toast(t('geoError'), 'error');
+    if (!navigator.geolocation) {
+      Modal.toast(t('geoError'), 'error');
+      return;
+    }
     navigator.geolocation.getCurrentPosition(async pos => {
       try {
         const { latitude: lat, longitude: lon } = pos.coords;
         const cur = await Api.byCoords(lat, lon, _lang);
         const fct = await Api.forecast(cur.data.name, _lang);
         _currentWeather = { current: cur.data, forecast: fct.data };
-        if (document.getElementById('search-input')) {
-          document.getElementById('search-input').value = cur.data.name;
-        }
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.value = cur.data.name;
         displayWeather(cur.data, fct.data);
-      } catch (err) { Modal.toast(err.message, 'error'); }
+      } catch (err) {
+        Modal.toast(err.message, 'error');
+      }
     }, () => Modal.toast(t('geoError'), 'error'));
   }
 
@@ -352,9 +618,7 @@ const App = (() => {
     const result = document.getElementById('weather-result');
     if (!result) return;
     const isFav = _favorites.some(f => f.city_name === current.name);
-    result.innerHTML =
-      WeatherCard.renderCurrent(current, _t, isFav) +
-      WeatherCard.renderForecast(forecast, _t);
+    result.innerHTML = WeatherCard.renderCurrent(current, _t, isFav) + WeatherCard.renderForecast(forecast, _t);
   }
 
   // ================================================================
@@ -362,10 +626,12 @@ const App = (() => {
   // ================================================================
   async function loadFavorites() {
     try {
-      const res   = await Api.getFavorites();
-      _favorites  = res.favorites;
+      const res = await Api.getFavorites();
+      _favorites = res.favorites || [];
       renderSidebarFavs();
-    } catch (_) {}
+    } catch (e) {
+      _favorites = [];
+    }
   }
 
   function renderSidebarFavs() {
@@ -377,7 +643,7 @@ const App = (() => {
     }
     list.innerHTML = _favorites.map(f => `
       <div class="city-chip" title="${f.city_name}">
-        <span onclick="App.searchCity('${f.city_name}')">${f.city_name}, ${f.country}</span>
+        <span onclick="App.searchCity('${f.city_name.replace(/'/g, "\\'")}')">${f.city_name}, ${f.country}</span>
         <button class="remove-btn" onclick="App.removeFavById(${f.id})">×</button>
       </div>`).join('');
   }
@@ -390,13 +656,15 @@ const App = (() => {
       Modal.toast(`${d.name} ${t('addFavorite')} ✓`, 'success');
       await loadFavorites();
       displayWeather(d, _currentWeather.forecast);
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   async function removeFav() {
     if (!_currentWeather) return;
     const name = _currentWeather.current.name;
-    const fav  = _favorites.find(f => f.city_name === name);
+    const fav = _favorites.find(f => f.city_name === name);
     if (fav) await removeFavById(fav.id);
   }
 
@@ -405,7 +673,13 @@ const App = (() => {
       await Api.removeFavorite(id);
       await loadFavorites();
       if (_currentWeather) displayWeather(_currentWeather.current, _currentWeather.forecast);
-    } catch (err) { Modal.toast(err.message, 'error'); }
+      const content = document.getElementById('content-area');
+      if (content && content.innerHTML.includes('Favoritos')) {
+        renderFavorites(content);
+      }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   async function renderFavorites(container) {
@@ -420,11 +694,11 @@ const App = (() => {
           : _favorites.map(f => `
               <div class="list-item">
                 <div class="list-item-info">
-                  <span class="list-item-title">${f.city_name}</span>
+                  <span class="list-item-title">${escapeHtml(f.city_name)}</span>
                   <span class="list-item-sub">${f.country} • ${f.lat}, ${f.lon}</span>
                 </div>
                 <div class="list-item-actions">
-                  <button class="btn btn-ghost btn-sm" onclick="App.searchCity('${f.city_name}')">🔍 Ver</button>
+                  <button class="btn btn-ghost btn-sm" onclick="App.searchCity('${f.city_name.replace(/'/g, "\\'")}')">🔍 Ver</button>
                   <button class="btn btn-danger btn-sm" onclick="App.removeFavById(${f.id})">×</button>
                 </div>
               </div>`).join('')}
@@ -435,7 +709,10 @@ const App = (() => {
     navigate('home');
     setTimeout(async () => {
       const input = document.getElementById('search-input');
-      if (input) { input.value = city; await doSearch(); }
+      if (input) {
+        input.value = city;
+        await doSearch();
+      }
     }, 100);
   }
 
@@ -446,7 +723,7 @@ const App = (() => {
     container.innerHTML = `<div class="loading-center"><div class="spinner"></div></div>`;
     try {
       const res = await Api.getHistory();
-      const h   = res.history;
+      const h = res.history || [];
       container.innerHTML = `
         <div class="page-header">
           <h2 class="page-title">🕒 ${t('history')}</h2>
@@ -458,13 +735,15 @@ const App = (() => {
             : h.map(item => `
                 <div class="list-item">
                   <div class="list-item-info">
-                    <span class="list-item-title">${item.city_name}</span>
+                    <span class="list-item-title">${escapeHtml(item.city_name)}</span>
                     <span class="list-item-sub">${item.country} • ${item.searched_at}</span>
                   </div>
-                  <button class="btn btn-ghost btn-sm" onclick="App.searchCity('${item.city_name}')">🔍</button>
+                  <button class="btn btn-ghost btn-sm" onclick="App.searchCity('${item.city_name.replace(/'/g, "\\'")}')">🔍</button>
                 </div>`).join('')}
         </div>`;
-    } catch (err) { container.innerHTML = `<p class="placeholder-text">${err.message}</p>`; }
+    } catch (err) {
+      container.innerHTML = `<p class="placeholder-text">${escapeHtml(err.message)}</p>`;
+    }
   }
 
   // ================================================================
@@ -474,7 +753,7 @@ const App = (() => {
     container.innerHTML = `<div class="loading-center"><div class="spinner"></div></div>`;
     try {
       const res = await Api.getAlerts();
-      const a   = res.alerts;
+      const a = res.alerts || [];
       container.innerHTML = `
         <div class="page-header">
           <h2 class="page-title">🔔 ${t('alerts')}</h2>
@@ -486,13 +765,15 @@ const App = (() => {
             : a.map(item => `
                 <div class="list-item">
                   <div class="list-item-info">
-                    <span class="list-item-title">${item.city_name}, ${item.country}</span>
+                    <span class="list-item-title">${escapeHtml(item.city_name)}, ${item.country}</span>
                     <span class="list-item-sub">${item.condition}${item.threshold ? ' • ' + item.threshold + '°C' : ''}</span>
                   </div>
                   <button class="btn btn-danger btn-sm" onclick="App.deleteAlert(${item.id})">× ${t('delete')}</button>
                 </div>`).join('')}
         </div>`;
-    } catch (err) { container.innerHTML = `<p class="placeholder-text">${err.message}</p>`; }
+    } catch (err) {
+      container.innerHTML = `<p class="placeholder-text">${escapeHtml(err.message)}</p>`;
+    }
   }
 
   function showAlertModal() {
@@ -521,23 +802,30 @@ const App = (() => {
   }
 
   async function doAddAlert() {
-    const city      = document.getElementById('alert-city')?.value.trim();
+    const city = document.getElementById('alert-city')?.value.trim();
     const condition = document.getElementById('alert-cond')?.value;
     const threshold = document.getElementById('alert-threshold')?.value;
-    if (!city) return Modal.toast(t('error'), 'error');
+    if (!city) {
+      Modal.toast(t('error'), 'error');
+      return;
+    }
     try {
       await Api.addAlert(city, '', condition, threshold ? parseFloat(threshold) : null);
       Modal.hide('alert-modal');
       Modal.toast(t('addAlert') + ' ✓', 'success');
       navigate('alerts');
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   async function deleteAlert(id) {
     try {
       await Api.deleteAlert(id);
       navigate('alerts');
-    } catch (err) { Modal.toast(err.message, 'error'); }
+    } catch (err) {
+      Modal.toast(err.message, 'error');
+    }
   }
 
   // ================================================================
@@ -564,30 +852,10 @@ const App = (() => {
         </div>
         <div class="settings-card">
           <h4>👤 Perfil</h4>
-          <p style="color:var(--text2);font-size:.88rem">${user?.name} • ${user?.email}</p>
+          <p style="color:var(--text2);font-size:.88rem">${escapeHtml(user?.name)} • ${escapeHtml(user?.email)}</p>
           <p style="color:var(--text2);font-size:.78rem;margin-top:.5rem">Perfil: <strong>${user?.role}</strong></p>
         </div>
       </div>`;
-  }
-
-  async function setTheme(theme) {
-    applyTheme(theme);
-    renderApp();
-    await loadFavorites();
-    navigate('settings');
-    try { await Api.savePrefs(_lang, theme); } catch (_) {}
-  }
-
-  async function setLang(lang) {
-    applyLang(lang);
-    renderApp();
-    await loadFavorites();
-    navigate('settings');
-    try { await Api.savePrefs(lang, _theme); } catch (_) {}
-  }
-
-  function toggleLang() {
-    setLang(_lang === 'pt' ? 'en' : 'pt');
   }
 
   // ================================================================
@@ -618,11 +886,11 @@ const App = (() => {
               </tr>
             </thead>
             <tbody>
-              ${res.users.map(u => `
+              ${(res.users || []).map(u => `
                 <tr>
                   <td style="font-family:'Space Mono',monospace;font-size:.78rem">#${u.id}</td>
-                  <td>${u.name}</td>
-                  <td style="color:var(--text2)">${u.email}</td>
+                  <td>${escapeHtml(u.name)}</td>
+                  <td style="color:var(--text2)">${escapeHtml(u.email)}</td>
                   <td><span class="badge badge-${u.role}">${u.role}</span></td>
                   <td>${u.language}</td>
                   <td style="font-size:.78rem;color:var(--text2)">${u.created_at}</td>
@@ -630,22 +898,53 @@ const App = (() => {
             </tbody>
           </table>
         </div>`;
-    } catch (err) { container.innerHTML = `<p class="placeholder-text">${err.message}</p>`; }
+    } catch (err) {
+      container.innerHTML = `<p class="placeholder-text">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>]/g, function(m) {
+      if (m === '&') return '&amp;';
+      if (m === '<') return '&lt;';
+      if (m === '>') return '&gt;';
+      return m;
+    });
   }
 
   // ================================================================
   // Public API
   // ================================================================
   return {
-    init, navigate,
-    toggleTheme, setTheme, setLang, toggleLang,
-    doLogin, doRegister, doForgot, doLogout,
-    switchAuthTab, showForgot,
-    doSearch, handleSearchKey, useGeo, searchCity,
-    addFav, removeFav, removeFavById,
-    showAlertModal, doAddAlert, deleteAlert,
+    init,
+    navigate,
+    toggleTheme,
+    setTheme,
+    setLang,
+    toggleLang,
+    doLogin,
+    doRegister,
+    doForgot,
+    doLogout,
+    switchAuthTab,
+    showForgot,
+    doSearch,
+    handleSearchKey,
+    useGeo,
+    searchCity,
+    addFav,
+    removeFav,
+    removeFavById,
+    showAlertModal,
+    doAddAlert,
+    deleteAlert
   };
 })();
 
 // Boot ao carregar a página
-document.addEventListener('DOMContentLoaded', () => App.init());
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => App.init());
+} else {
+  App.init();
+}

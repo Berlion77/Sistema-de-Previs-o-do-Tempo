@@ -1,40 +1,325 @@
 <!DOCTYPE html>
-<html lang="pt" data-theme="dark">
+<html lang="pt">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="A Juba que Prevê — Sistema de Previsão do Tempo">
-  <title>A Juba que Prevê</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦁</text></svg>">
-
-  <!-- Estilos -->
-  <link rel="stylesheet" href="assets/css/style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A Juba que Prevê</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a12 0%, #1a1a2e 100%);
+            color: #e8e8f4;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .logo { font-size: 64px; margin-bottom: 10px; }
+        h1 { font-size: 2.5rem; background: linear-gradient(135deg, #f7c948, #f7a52a); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { color: #9090b8; }
+        
+        /* Cards */
+        .card {
+            background: rgba(26, 26, 46, 0.9);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        /* Search */
+        .search-box {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 14px 20px;
+            border-radius: 50px;
+            border: 1px solid #2a2a3e;
+            background: #0a0a12;
+            color: #e8e8f4;
+            font-size: 16px;
+        }
+        .search-box button {
+            padding: 14px 28px;
+            border-radius: 50px;
+            border: none;
+            background: linear-gradient(135deg, #f7c948, #f7a52a);
+            color: #0a0a12;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .search-box button:hover { transform: scale(1.02); }
+        
+        /* Weather Display */
+        .weather-main {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .temp-display {
+            text-align: center;
+        }
+        .temp {
+            font-size: 72px;
+            font-weight: bold;
+            color: #f7a52a;
+        }
+        .weather-icon { font-size: 64px; }
+        .weather-desc { text-transform: capitalize; color: #9090b8; }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .stat {
+            background: rgba(10,10,18,0.6);
+            padding: 12px;
+            border-radius: 16px;
+            text-align: center;
+        }
+        .stat-label { font-size: 12px; color: #9090b8; text-transform: uppercase; }
+        .stat-value { font-size: 20px; font-weight: bold; margin-top: 5px; }
+        
+        /* Forecast */
+        .forecast-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .forecast-day {
+            background: rgba(10,10,18,0.6);
+            padding: 16px;
+            border-radius: 16px;
+            text-align: center;
+        }
+        .forecast-temp { font-size: 24px; font-weight: bold; color: #f7a52a; }
+        .forecast-temp-min { color: #9090b8; font-size: 14px; }
+        
+        /* Login Form */
+        .login-card {
+            max-width: 400px;
+            margin: 50px auto;
+        }
+        .login-card input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 12px;
+            border: 1px solid #2a2a3e;
+            background: #0a0a12;
+            color: #e8e8f4;
+        }
+        .login-card button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #f7c948, #f7a52a);
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .error { color: #ef5350; margin-top: 10px; text-align: center; }
+        .hidden { display: none; }
+        
+        @media (max-width: 768px) {
+            .weather-main { flex-direction: column; text-align: center; }
+            .temp { font-size: 48px; }
+        }
+    </style>
 </head>
 <body>
-
-  <!-- Ponto de montagem da aplicação -->
-  <div id="app">
-    <!-- Loading inicial -->
-    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0a0a12;color:#9090b8;flex-direction:column;gap:1rem;font-family:'Segoe UI',sans-serif">
-      <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#f7c948,#f7a52a);display:flex;align-items:center;justify-content:center;font-size:2rem;animation:spin .7s linear infinite">🦁</div>
-      <p style="font-size:.9rem;letter-spacing:2px;text-transform:uppercase">A carregar...</p>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🦁</div>
+            <h1>A Juba que Prevê</h1>
+            <p class="subtitle">O clima na palma da tua pata</p>
+        </div>
+        
+        <!-- Login Form -->
+        <div id="loginCard" class="card login-card">
+            <h3 style="margin-bottom: 20px;">🔐 Acesso ao Sistema</h3>
+            <input type="email" id="email" placeholder="Email" value="admin@ajuba.ao">
+            <input type="password" id="password" placeholder="Senha" value="admin123">
+            <button onclick="doLogin()">Entrar</button>
+            <div id="loginError" class="error"></div>
+        </div>
+        
+        <!-- App Content -->
+        <div id="appContent" class="hidden">
+            <div class="search-box">
+                <input type="text" id="city" placeholder="Digite o nome da cidade..." value="Luanda">
+                <button onclick="getWeather()">🔍 Buscar</button>
+                <button onclick="getLocation()">📍 Minha Localização</button>
+            </div>
+            
+            <div id="weatherCard" class="card"></div>
+            <div id="forecastCard" class="card"></div>
+        </div>
     </div>
-  </div>
 
-  <!-- i18n -->
-  <script src="i18n/pt.js"></script>
-  <script src="i18n/en.js"></script>
-
-  <!-- Serviços (dependências primeiro) -->
-  <script src="services/auth.js"></script>
-  <script src="services/api.js"></script>
-
-  <!-- Componentes reutilizáveis -->
-  <script src="components/modal.js"></script>
-  <script src="components/weather-card.js"></script>
-
-  <!-- Lógica principal -->
-  <script src="assets/js/app.js"></script>
-
+    <script>
+        let authToken = '';
+        
+        async function doLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/a-juba-que-preve/backend/index.php/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.token) {
+                    authToken = data.token;
+                    document.getElementById('loginCard').classList.add('hidden');
+                    document.getElementById('appContent').classList.remove('hidden');
+                    getWeather();
+                } else {
+                    document.getElementById('loginError').innerText = data.error || 'Erro no login';
+                }
+            } catch (err) {
+                document.getElementById('loginError').innerText = err.message;
+            }
+        }
+        
+        async function getWeather() {
+            const city = document.getElementById('city').value;
+            if (!city) return;
+            
+            try {
+                // Clima atual
+                const weatherRes = await fetch(`/a-juba-que-preve/backend/index.php/weather/current?city=${encodeURIComponent(city)}&lang=pt`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const weatherData = await weatherRes.json();
+                
+                // Previsão
+                const forecastRes = await fetch(`/a-juba-que-preve/backend/index.php/weather/forecast?city=${encodeURIComponent(city)}&lang=pt`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const forecastData = await forecastRes.json();
+                
+                if (weatherData.data) {
+                    displayWeather(weatherData.data);
+                    displayForecast(forecastData.data);
+                } else {
+                    document.getElementById('weatherCard').innerHTML = '<p>Erro ao buscar dados</p>';
+                }
+            } catch (err) {
+                document.getElementById('weatherCard').innerHTML = `<p class="error">Erro: ${err.message}</p>`;
+            }
+        }
+        
+        function displayWeather(data) {
+            const temp = Math.round(data.main.temp);
+            const feels = Math.round(data.main.feels_like);
+            const humidity = data.main.humidity;
+            const wind = data.wind.speed;
+            const pressure = data.main.pressure;
+            const desc = data.weather[0].description;
+            const icon = getWeatherIcon(data.weather[0].icon);
+            
+            document.getElementById('weatherCard').innerHTML = `
+                <div class="weather-main">
+                    <div class="temp-display">
+                        <div class="weather-icon">${icon}</div>
+                        <div class="temp">${temp}°C</div>
+                        <div class="weather-desc">${desc}</div>
+                    </div>
+                    <div class="stats">
+                        <div class="stat"><div class="stat-label">Sensação</div><div class="stat-value">${feels}°C</div></div>
+                        <div class="stat"><div class="stat-label">Humidade</div><div class="stat-value">${humidity}%</div></div>
+                        <div class="stat"><div class="stat-label">Vento</div><div class="stat-value">${wind} m/s</div></div>
+                        <div class="stat"><div class="stat-label">Pressão</div><div class="stat-value">${pressure} hPa</div></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function displayForecast(data) {
+            if (!data || !data.list) return;
+            
+            // Pegar 5 dias (cada dia tem 8 previsões, pegar 1 por dia)
+            const daily = [];
+            const seen = new Set();
+            for (const item of data.list) {
+                const date = item.dt_txt.split(' ')[0];
+                if (!seen.has(date) && daily.length < 5) {
+                    seen.add(date);
+                    daily.push(item);
+                }
+            }
+            
+            let html = '<h3 style="margin-bottom: 20px;">📅 Previsão para os próximos dias</h3><div class="forecast-grid">';
+            for (const day of daily) {
+                const temp = Math.round(day.main.temp);
+                const date = new Date(day.dt * 1000);
+                const dayName = date.toLocaleDateString('pt', { weekday: 'short', day: 'numeric' });
+                const icon = getWeatherIcon(day.weather[0].icon);
+                
+                html += `
+                    <div class="forecast-day">
+                        <div>${dayName}</div>
+                        <div style="font-size: 32px; margin: 10px 0;">${icon}</div>
+                        <div class="forecast-temp">${temp}°C</div>
+                        <div style="font-size: 12px; color: #9090b8;">${day.weather[0].description}</div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            document.getElementById('forecastCard').innerHTML = html;
+        }
+        
+        function getWeatherIcon(iconCode) {
+            const icons = {
+                '01d': '☀️', '01n': '🌙',
+                '02d': '⛅', '02n': '⛅',
+                '03d': '☁️', '03n': '☁️',
+                '04d': '☁️', '04n': '☁️',
+                '09d': '🌧️', '09n': '🌧️',
+                '10d': '🌦️', '10n': '🌧️',
+                '11d': '⛈️', '11n': '⛈️',
+                '13d': '❄️', '13n': '❄️',
+                '50d': '🌫️', '50n': '🌫️'
+            };
+            return icons[iconCode] || '🌡️';
+        }
+        
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    try {
+                        const res = await fetch(`/a-juba-que-preve/backend/index.php/weather/coords?lat=${latitude}&lon=${longitude}&lang=pt`, {
+                            headers: { 'Authorization': `Bearer ${authToken}` }
+                        });
+                        const data = await res.json();
+                        if (data.data) {
+                            document.getElementById('city').value = data.data.name;
+                            getWeather();
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                });
+            }
+        }
+    </script>
 </body>
 </html>
