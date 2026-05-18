@@ -17,12 +17,20 @@ const Auth = (() => {
   function getUser() {
     if (_user) return _user;
     const stored = localStorage.getItem('ajuba_user');
-    if (stored) _user = JSON.parse(stored);
+    if (stored && stored !== 'undefined') {
+      try {
+        _user = JSON.parse(stored);
+      } catch (e) {
+        console.error('Erro ao fazer parse do usuário:', e);
+        _user = null;
+      }
+    }
     return _user;
   }
 
   function isLoggedIn() {
-    return !!localStorage.getItem('ajuba_token');
+    const token = localStorage.getItem('ajuba_token');
+    return token && token !== 'undefined' && token !== null;
   }
 
   function isAdmin() {

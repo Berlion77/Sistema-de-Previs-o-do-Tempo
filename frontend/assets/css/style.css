@@ -697,3 +697,13 @@ body {
 
 /* ---- Hidden ---- */
 .hidden { display: none !important; }
+
+.error-message {
+  background: rgba(239, 83, 80, 0.1);
+  border-left: 3px solid #ef5350;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  color: #ef5350;
+  font-size: 0.85rem;
+}
+

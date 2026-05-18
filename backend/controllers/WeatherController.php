@@ -8,7 +8,6 @@ require_once __DIR__ . '/../models/WeatherModel.php';
 
 class WeatherController {
 
-    // ---- Buscar clima atual ----
     public static function current(): void {
         $payload = requireAuth();
         $city    = trim($_GET['city'] ?? '');
@@ -31,7 +30,6 @@ class WeatherController {
         jsonResponse(['data' => $data, 'from_cache' => false]);
     }
 
-    // ---- Previsão de 5 dias ----
     public static function forecast(): void {
         requireAuth();
         $city = trim($_GET['city'] ?? '');
@@ -50,7 +48,6 @@ class WeatherController {
         jsonResponse(['data' => $data, 'from_cache' => false]);
     }
 
-    // ---- Buscar por coordenadas (geolocalização) ----
     public static function byCoords(): void {
         requireAuth();
         $lat  = (float)($_GET['lat'] ?? 0);
@@ -70,7 +67,6 @@ class WeatherController {
         jsonResponse(['data' => $data, 'from_cache' => false]);
     }
 
-    // ---- Favoritos ----
     public static function getFavorites(): void {
         $payload = requireAuth();
         jsonResponse(['favorites' => WeatherModel::getFavorites($payload['sub'])]);
@@ -96,13 +92,12 @@ class WeatherController {
         jsonResponse(['message' => 'Favorito removido']);
     }
 
-    // ---- Histórico ----
     public static function getHistory(): void {
         $payload = requireAuth();
         jsonResponse(['history' => WeatherModel::getHistory($payload['sub'])]);
     }
 
-    // ---- Alertas ----
+    // Alertas
     public static function getAlerts(): void {
         $payload = requireAuth();
         jsonResponse(['alerts' => WeatherModel::getAlerts($payload['sub'])]);
@@ -128,7 +123,6 @@ class WeatherController {
         jsonResponse(['message' => 'Alerta removido']);
     }
 
-    // ---- Export CSV ----
     public static function exportHistoryCSV(): void {
         $payload = requireAuth();
         $history = WeatherModel::getHistory($payload['sub'], 1000);
@@ -145,14 +139,12 @@ class WeatherController {
         exit;
     }
 
-    // ---- Admin: listar todos utilizadores ----
     public static function adminUsers(): void {
         requireAdmin();
         require_once __DIR__ . '/../models/UserModel.php';
         jsonResponse(['users' => UserModel::listAll()]);
     }
 
-    // ---- Helper: HTTP fetch ----
     private static function fetchApi(string $url): array {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
