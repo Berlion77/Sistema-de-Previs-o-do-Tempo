@@ -1,0 +1,9 @@
+RewriteEngine On
+RewriteBase /a-juba-que-preve/frontend/
+
+# Permitir acesso a arquivos e diretórios existentes
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Redirecionar tudo para index.html (para SPA)
+RewriteRule ^(.*)$ index.html [QSA,L]

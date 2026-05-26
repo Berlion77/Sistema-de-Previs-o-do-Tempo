@@ -1,0 +1,16 @@
+RewriteEngine On
+RewriteBase /a-juba-que-preve/
+
+# Redirecionar raiz para frontend
+RewriteRule ^$ frontend/ [L]
+
+# Permitir acesso ao frontend e backend
+RewriteRule ^frontend/(.*)$ frontend/$1 [L]
+RewriteRule ^backend/(.*)$ backend/index.php?path=$1 [QSA,L]
+
+# Servir arquivos estáticos normalmente
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Tudo mais vai para frontend
+RewriteRule ^(.*)$ frontend/$1 [L]

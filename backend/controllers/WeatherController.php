@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../middleware/auth.php';
 require_once __DIR__ . '/../models/WeatherModel.php';
+require_once __DIR__ . '/../models/CityNamesMap.php';
 
 class WeatherController {
 
@@ -18,11 +19,13 @@ class WeatherController {
         $cacheKey = "current:{$city}:{$lang}";
         $cached   = WeatherModel::getCache($cacheKey);
         if ($cached) {
+            $cached['name'] = CityNamesMap::correct($cached['name']); // Corrigir nome do cache também
             jsonResponse(['data' => $cached, 'from_cache' => true]);
         }
 
         $url  = BASE_URL . "/weather?q=" . urlencode($city) . "&appid=" . API_KEY . "&units=metric&lang={$lang}";
         $data = self::fetchApi($url);
+        $data['name'] = CityNamesMap::correct($data['name']); // Corrigir nome da cidade
 
         WeatherModel::setCache($cacheKey, $data);
         WeatherModel::addHistory($payload['sub'], $data['name'], $data['sys']['country'] ?? '');
@@ -39,10 +42,16 @@ class WeatherController {
 
         $cacheKey = "forecast:{$city}:{$lang}";
         $cached   = WeatherModel::getCache($cacheKey);
-        if ($cached) jsonResponse(['data' => $cached, 'from_cache' => true]);
+        if ($cached) {
+            if (isset($cached['city']['name'])) {
+                $cached['city']['name'] = CityNamesMap::correct($cached['city']['name']); // Corrigir nome do cache também
+            }
+            jsonResponse(['data' => $cached, 'from_cache' => true]);
+        }
 
         $url  = BASE_URL . "/forecast?q=" . urlencode($city) . "&appid=" . API_KEY . "&units=metric&lang={$lang}&cnt=40";
         $data = self::fetchApi($url);
+        $data['city']['name'] = CityNamesMap::correct($data['city']['name']); // Corrigir nome da cidade
 
         WeatherModel::setCache($cacheKey, $data);
         jsonResponse(['data' => $data, 'from_cache' => false]);
@@ -58,10 +67,14 @@ class WeatherController {
 
         $cacheKey = "coords:{$lat}:{$lon}:{$lang}";
         $cached   = WeatherModel::getCache($cacheKey);
-        if ($cached) jsonResponse(['data' => $cached, 'from_cache' => true]);
+        if ($cached) {
+            $cached['name'] = CityNamesMap::correct($cached['name']); // Corrigir nome do cache também
+            jsonResponse(['data' => $cached, 'from_cache' => true]);
+        }
 
         $url  = BASE_URL . "/weather?lat={$lat}&lon={$lon}&appid=" . API_KEY . "&units=metric&lang={$lang}";
         $data = self::fetchApi($url);
+        $data['name'] = CityNamesMap::correct($data['name']); // Corrigir nome da cidade
 
         WeatherModel::setCache($cacheKey, $data);
         jsonResponse(['data' => $data, 'from_cache' => false]);
