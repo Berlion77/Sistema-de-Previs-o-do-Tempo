@@ -20,7 +20,12 @@ const App = (() => {
 
     if (!Auth.isLoggedIn()) {
       console.log('Usuário não logado, mostrar auth');
+      const urlParams = new URLSearchParams(window.location.search);
+      const resetToken = urlParams.get('reset_token');
       showAuthPage();
+      if (resetToken) {
+        showResetForm(resetToken);
+      }
     } else {
       console.log('Usuário logado, carregar app');
       await loadApp();
@@ -88,6 +93,30 @@ const App = (() => {
     setLang(_lang === 'pt' ? 'en' : 'pt');
   }
 
+  function renderLangSelector() {
+    return `
+      <div class="auth-lang-selector">
+        <span class="lang-label">${t('language')}:</span>
+        <button class="lang-btn ${_lang === 'pt' ? 'active' : ''}" type="button" onclick="App.setLang('pt')">🇵🇹 Português</button>
+        <button class="lang-btn ${_lang === 'en' ? 'active' : ''}" type="button" onclick="App.setLang('en')">🇬🇧 English</button>
+      </div>`;
+  }
+
+  async function setLang(lang) {
+    applyLang(lang);
+    if (Auth.isLoggedIn()) {
+      try {
+        await Api.savePrefs(lang, _theme);
+      } catch (e) {
+      }
+      renderApp();
+      await loadFavorites();
+      navigate('settings');
+    } else {
+      showAuthPage();
+    }
+  }
+
   // ================================================================
   // Auth Page
   // ================================================================
@@ -100,6 +129,7 @@ const App = (() => {
   function renderAuthPage() {
     return `
       <div class="auth-page">
+        ${renderLangSelector()}
         <div class="auth-card">
           <div class="auth-logo">
             <div class="brand-logo">🦁</div>
@@ -111,7 +141,8 @@ const App = (() => {
             <button class="auth-tab" onclick="App.switchAuthTab('register')">${t('register')}</button>
           </div>
           <div id="auth-form-container">${renderLoginForm()}</div>
-          <div id="auth-error" class="error-message" style="display:none; margin-top:1rem; padding:0.75rem; background:rgba(239,83,80,0.1); border-radius:8px; color:#ef5350; text-align:center;"></div>
+            <div id="auth-error" class="error-message" style="display:none; margin-top:1rem; padding:0.75rem; background:rgba(239,83,80,0.1); border-radius:8px; color:#ef5350; text-align:center;"></div>
+            <div id="toast-container"></div>
         </div>
       </div>`;
   }
@@ -186,6 +217,30 @@ const App = (() => {
           <input class="form-input" type="email" id="forgot-email" placeholder="email@exemplo.com" autocomplete="email">
         </div>
         <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="App.doForgot()">${t('sendReset')}</button>
+        <p style="text-align:center;margin-top:1rem;color:var(--text2);font-size:.85rem">${t('resetHint')}</p>
+        <p style="text-align:center;margin-top:.5rem"><a href="#" onclick="App.showResetForm();return false" style="color:var(--text2);font-size:.85rem">${t('haveToken')}</a></p>
+        <p style="text-align:center;margin-top:1rem"><a href="#" onclick="App.switchAuthTab('login');return false" style="color:var(--text2);font-size:.85rem">${t('back')}</a></p>`;
+    }
+  }
+
+  function showResetForm(token = '') {
+    const container = document.getElementById('auth-form-container');
+    if (container) {
+      container.innerHTML = `
+        <p style="color:var(--text2);font-size:.88rem;margin-bottom:1rem">${t('resetPassword')}</p>
+        <div class="form-group">
+          <label class="form-label">${t('resetToken')}</label>
+          <input class="form-input" type="text" id="reset-token" placeholder="${t('resetTokenPlaceholder')}" value="${token}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('newPassword')}</label>
+          <input class="form-input" type="password" id="reset-password" placeholder="••••••" autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label class="form-label">${t('confirmPassword')}</label>
+          <input class="form-input" type="password" id="reset-confirm" placeholder="••••••" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="App.doReset()">${t('resetPassword')}</button>
         <p style="text-align:center;margin-top:1rem"><a href="#" onclick="App.switchAuthTab('login');return false" style="color:var(--text2);font-size:.85rem">${t('back')}</a></p>`;
     }
   }
@@ -195,8 +250,12 @@ const App = (() => {
       if (e.key === 'Enter') {
         const login = document.getElementById('login-pass');
         const reg = document.getElementById('reg-pass');
+        const forgot = document.getElementById('forgot-email');
+        const reset = document.getElementById('reset-password');
         if (login) App.doLogin();
         else if (reg) App.doRegister();
+        else if (forgot) App.doForgot();
+        else if (reset) App.doReset();
       }
     });
   }
@@ -254,7 +313,38 @@ const App = (() => {
     }
     try {
       const res = await Api.forgot(email);
-      showError(res.message);
+      Modal.toast(res.message, 'success');
+      if (res.reset_token) {
+        showResetForm(res.reset_token);
+      }
+    } catch (err) {
+      showError(err.message);
+    }
+  }
+
+  async function doReset() {
+    const token = document.getElementById('reset-token')?.value.trim();
+    const password = document.getElementById('reset-password')?.value;
+    const confirm = document.getElementById('reset-confirm')?.value;
+
+    if (!token || !password || !confirm) {
+      showError(t('error'));
+      return;
+    }
+    if (password !== confirm) {
+      showError(t('passwordMismatch'));
+      return;
+    }
+    if (password.length < 6) {
+      showError(t('passwordLength'));
+      return;
+    }
+
+    try {
+      const res = await Api.reset(token, password);
+      Modal.toast(res.message, 'success');
+      window.history.replaceState({}, '', window.location.pathname);
+      showAuthPage();
     } catch (err) {
       showError(err.message);
     }
@@ -432,7 +522,7 @@ const App = (() => {
 
   return {
     init, navigate, toggleTheme, setTheme, setLang, toggleLang,
-    doLogin, doRegister, doForgot, doLogout, switchAuthTab, showForgot,
+    doLogin, doRegister, doForgot, doReset, doLogout, switchAuthTab, showForgot, showResetForm,
     doSearch, handleSearchKey, useGeo, searchCity, addFav, removeFav, removeFavById,
     showAlertModal, doAddAlert, deleteAlert
   };
